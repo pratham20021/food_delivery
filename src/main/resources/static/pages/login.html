@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — FoodDash</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/pages.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+    <div class="nav-container">
+        <a href="../index.html" class="nav-logo">🍔 FoodDash</a>
+        <ul class="nav-menu" id="navMenu">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="restaurants.html" class="nav-link">Restaurants</a></li>
+        </ul>
+        <div class="nav-actions">
+            <div id="guestActions">
+                <a href="login.html" class="btn btn-outline active">Login</a>
+                <a href="register.html" class="btn btn-primary">Sign Up</a>
+            </div>
+            <div id="userActions" style="display:none">
+                <span class="nav-user" id="navUserName"></span>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+    </div>
+</nav>
+
+<!-- LOGIN FORM -->
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">🍔</div>
+        <h2>Welcome Back!</h2>
+        <p class="auth-subtitle">Sign in to your FoodDash account</p>
+
+        <div id="alertBox"></div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" id="email" class="form-control"
+                       placeholder="you@example.com" required autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <div class="password-wrap">
+                    <input type="password" id="password" class="form-control"
+                           placeholder="Enter your password" required autocomplete="current-password">
+                    <button type="button" class="password-toggle" onclick="togglePassword('password', this)">👁️</button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">
+                Sign In
+            </button>
+        </form>
+
+        <div class="auth-divider">or</div>
+
+        <div class="auth-switch">
+            Don't have an account? <a href="register.html">Create one free</a>
+        </div>
+
+        <div style="margin-top:1rem;padding:0.8rem;background:var(--gray-100);border-radius:var(--radius-md);font-size:0.8rem;color:var(--gray-700)">
+            <strong>Demo:</strong> Register a new account to get started instantly.
+        </div>
+    </div>
+</div>
+
+<script src="../js/auth.js"></script>
+<script>
+    // Redirect if already logged in
+    if (isLoggedIn()) window.location.href = 'restaurants.html';
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const email    = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const btn      = document.getElementById('submitBtn');
+        const alertBox = document.getElementById('alertBox');
+
+        alertBox.innerHTML = '';
+
+        if (!email || !password) {
+            alertBox.innerHTML = `<div class="alert alert-error">⚠️ Please fill in all fields.</div>`;
+            return;
+        }
+
+        btn.disabled     = true;
+        btn.textContent  = 'Signing in...';
+
+        try {
+            const res = await apiFetch('/auth/login', 'POST', { email, password }, false);
+            saveAuth(res.data.token, { name: res.data.name, email: res.data.email, role: res.data.role });
+            showToast('Welcome back, ' + res.data.name + '! 🎉', 'success');
+            setTimeout(() => window.location.href = 'restaurants.html', 500);
+        } catch (err) {
+            alertBox.innerHTML = `<div class="alert alert-error">❌ ${err.message}</div>`;
+            btn.disabled    = false;
+            btn.textContent = 'Sign In';
+        }
+    }
+
+    function togglePassword(id, btn) {
+        const input = document.getElementById(id);
+        if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
+        else                           { input.type = 'password'; btn.textContent = '👁️'; }
+    }
+
+    function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
+
+    window.addEventListener('scroll', () => {
+        document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+    });
+</script>
+</body>
+</html>

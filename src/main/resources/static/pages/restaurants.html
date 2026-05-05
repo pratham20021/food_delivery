@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurants — FoodDash</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/pages.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar scrolled" id="navbar">
+    <div class="nav-container">
+        <a href="../index.html" class="nav-logo">🍔 FoodDash</a>
+        <ul class="nav-menu" id="navMenu">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="restaurants.html" class="nav-link active">Restaurants</a></li>
+            <li><a href="orders.html" class="nav-link" id="ordersNavLink" style="display:none">My Orders</a></li>
+        </ul>
+        <div class="nav-actions">
+            <div id="guestActions">
+                <a href="login.html" class="btn btn-outline">Login</a>
+                <a href="register.html" class="btn btn-primary">Sign Up</a>
+            </div>
+            <div id="userActions" style="display:none">
+                <span class="nav-user" id="navUserName"></span>
+                <a href="orders.html" class="btn btn-outline">My Orders</a>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+    </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+    <div class="container">
+        <h1>🏪 Restaurants</h1>
+        <p>Discover the best food near you</p>
+    </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+    <div class="container">
+        <div class="filter-bar-inner">
+            <div class="filter-search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="form-control"
+                       placeholder="Search restaurants or cuisines...">
+            </div>
+            <div class="filter-chips" id="cuisineChips">
+                <button class="chip active" data-cuisine="">All</button>
+                <button class="chip" data-cuisine="Italian">🍕 Italian</button>
+                <button class="chip" data-cuisine="American">🍔 American</button>
+                <button class="chip" data-cuisine="Japanese">🍣 Japanese</button>
+                <button class="chip" data-cuisine="Mexican">🌮 Mexican</button>
+                <button class="chip" data-cuisine="Chinese">🍜 Chinese</button>
+                <button class="chip" data-cuisine="Indian">🍛 Indian</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RESTAURANTS GRID -->
+<div class="page-wrapper">
+    <section class="restaurants-section">
+        <div class="container">
+            <div class="results-header">
+                <p class="results-count" id="resultsCount">Loading...</p>
+            </div>
+            <div class="restaurants-grid" id="restaurantsGrid">
+                <div class="loading-container">
+                    <div class="spinner"></div>
+                    <p>Finding restaurants near you...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom" style="border:none;padding:1.5rem 0">
+            <p>© 2024 FoodDash. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/auth.js"></script>
+<script>
+    const EMOJIS = { Italian:'🍕', American:'🍔', Japanese:'🍣', Mexican:'🌮', Chinese:'🍜', Indian:'🍛', default:'🍽️' };
+    const DELIVERY_TIMES = ['20-30', '25-35', '30-40', '15-25', '35-45'];
+
+    let allRestaurants = [];
+    let activeSearch   = '';
+    let activeCuisine  = '';
+
+    // Read URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('cuisine')) activeCuisine = params.get('cuisine');
+    if (params.get('search'))  activeSearch  = params.get('search');
+
+    async function loadRestaurants() {
+        try {
+            const res = await apiFetch('/restaurants');
+            allRestaurants = res.data;
+            renderRestaurants();
+        } catch (err) {
+            document.getElementById('restaurantsGrid').innerHTML =
+                `<div class="alert alert-error">❌ ${err.message}</div>`;
+        }
+    }
+
+    function renderRestaurants() {
+        const grid    = document.getElementById('restaurantsGrid');
+        const countEl = document.getElementById('resultsCount');
+
+        let filtered = allRestaurants.filter(r => {
+            const matchSearch  = !activeSearch  || r.name.toLowerCase().includes(activeSearch.toLowerCase()) || r.cuisine.toLowerCase().includes(activeSearch.toLowerCase());
+            const matchCuisine = !activeCuisine || r.cuisine.toLowerCase().includes(activeCuisine.toLowerCase());
+            return matchSearch && matchCuisine;
+        });
+
+        countEl.innerHTML = `Showing <strong>${filtered.length}</strong> restaurant${filtered.length !== 1 ? 's' : ''}`;
+
+        if (filtered.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1">
+                    <div class="empty-icon">🔍</div>
+                    <h3>No restaurants found</h3>
+                    <p>Try a different search or cuisine filter</p>
+                    <button class="btn btn-outline" style="margin-top:1rem" onclick="clearFilters()">Clear Filters</button>
+                </div>`;
+            return;
+        }
+
+        grid.innerHTML = filtered.map((r, i) => {
+            const emoji    = EMOJIS[r.cuisine] || EMOJIS.default;
+            const delivery = DELIVERY_TIMES[i % DELIVERY_TIMES.length];
+            const stars    = '⭐'.repeat(Math.round(r.rating || 4));
+            const bgColors = [
+                'linear-gradient(135deg,#ffeaea,#fff5f5)',
+                'linear-gradient(135deg,#fff8e1,#fffde7)',
+                'linear-gradient(135deg,#e8f5e9,#f1f8e9)',
+                'linear-gradient(135deg,#e3f2fd,#e8eaf6)',
+                'linear-gradient(135deg,#fce4ec,#f3e5f5)',
+                'linear-gradient(135deg,#e0f7fa,#e0f2f1)',
+            ];
+            const bg = bgColors[i % bgColors.length];
+
+            return `
+            <a class="restaurant-card" href="menu.html?id=${r.id}&name=${encodeURIComponent(r.name)}">
+                <div class="restaurant-img" style="background:${bg}">
+                    <span style="font-size:4.5rem;z-index:1">${emoji}</span>
+                    <div class="img-overlay"></div>
+                    <div class="delivery-time">🕐 ${delivery} min</div>
+                </div>
+                <div class="restaurant-body">
+                    <h3>${r.name}</h3>
+                    <div class="restaurant-meta">
+                        <span class="restaurant-rating">${r.rating ? r.rating.toFixed(1) + ' ⭐' : '4.0 ⭐'}</span>
+                        <span>•</span>
+                        <span>${r.cuisine}</span>
+                        <span>•</span>
+                        <span>${delivery} min</span>
+                    </div>
+                    <p style="font-size:0.82rem;color:var(--gray-700);margin-bottom:0.8rem">📍 ${r.address}</p>
+                    <div class="restaurant-footer">
+                        <span class="badge badge-primary">${r.cuisine}</span>
+                        <span class="btn btn-primary btn-sm">Order Now →</span>
+                    </div>
+                </div>
+            </a>`;
+        }).join('');
+    }
+
+    function clearFilters() {
+        activeSearch  = '';
+        activeCuisine = '';
+        document.getElementById('searchInput').value = '';
+        document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.cuisine === ''));
+        renderRestaurants();
+    }
+
+    // Search input
+    document.getElementById('searchInput').addEventListener('input', e => {
+        activeSearch = e.target.value.trim();
+        renderRestaurants();
+    });
+
+    // Cuisine chips
+    document.getElementById('cuisineChips').addEventListener('click', e => {
+        const chip = e.target.closest('.chip');
+        if (!chip) return;
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        activeCuisine = chip.dataset.cuisine;
+        renderRestaurants();
+    });
+
+    // Apply URL params to UI
+    if (activeCuisine) {
+        document.querySelectorAll('.chip').forEach(c => {
+            c.classList.toggle('active', c.dataset.cuisine.toLowerCase() === activeCuisine.toLowerCase());
+        });
+    }
+    if (activeSearch) {
+        document.getElementById('searchInput').value = activeSearch;
+    }
+
+    function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
+
+    loadRestaurants();
+</script>
+</body>
+</html>

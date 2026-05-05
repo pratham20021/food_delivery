@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register — FoodDash</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/pages.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+    <div class="nav-container">
+        <a href="../index.html" class="nav-logo">🍔 FoodDash</a>
+        <ul class="nav-menu" id="navMenu">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="restaurants.html" class="nav-link">Restaurants</a></li>
+        </ul>
+        <div class="nav-actions">
+            <div id="guestActions">
+                <a href="login.html" class="btn btn-outline">Login</a>
+                <a href="register.html" class="btn btn-primary">Sign Up</a>
+            </div>
+            <div id="userActions" style="display:none">
+                <span class="nav-user" id="navUserName"></span>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+    </div>
+</nav>
+
+<!-- REGISTER FORM -->
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">🍔</div>
+        <h2>Create Account</h2>
+        <p class="auth-subtitle">Join FoodDash and start ordering today</p>
+
+        <div id="alertBox"></div>
+
+        <form id="registerForm" onsubmit="handleRegister(event)" novalidate>
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" id="name" class="form-control"
+                       placeholder="John Doe" required autocomplete="name">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" id="email" class="form-control"
+                       placeholder="you@example.com" required autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Phone Number <span style="color:var(--gray-500);font-weight:400">(optional)</span></label>
+                <input type="tel" id="phone" class="form-control"
+                       placeholder="+1 (555) 000-0000" autocomplete="tel">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <div class="password-wrap">
+                    <input type="password" id="password" class="form-control"
+                           placeholder="Min. 6 characters" required autocomplete="new-password">
+                    <button type="button" class="password-toggle" onclick="togglePassword('password', this)">👁️</button>
+                </div>
+                <div id="passwordStrength" style="margin-top:0.4rem;font-size:0.78rem"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Confirm Password</label>
+                <div class="password-wrap">
+                    <input type="password" id="confirmPassword" class="form-control"
+                           placeholder="Repeat your password" required autocomplete="new-password">
+                    <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword', this)">👁️</button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">
+                Create Account
+            </button>
+        </form>
+
+        <div class="auth-switch">
+            Already have an account? <a href="login.html">Sign in</a>
+        </div>
+    </div>
+</div>
+
+<script src="../js/auth.js"></script>
+<script>
+    if (isLoggedIn()) window.location.href = 'restaurants.html';
+
+    // Password strength indicator
+    document.getElementById('password').addEventListener('input', function () {
+        const val = this.value;
+        const el  = document.getElementById('passwordStrength');
+        if (!val) { el.innerHTML = ''; return; }
+
+        let strength = 0;
+        if (val.length >= 6)  strength++;
+        if (val.length >= 10) strength++;
+        if (/[A-Z]/.test(val)) strength++;
+        if (/[0-9]/.test(val)) strength++;
+        if (/[^A-Za-z0-9]/.test(val)) strength++;
+
+        const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
+        const colors = ['', '#e74c3c', '#f39c12', '#f39c12', '#27ae60', '#27ae60'];
+        el.innerHTML = `<span style="color:${colors[strength]}">● ${labels[strength]}</span>`;
+    });
+
+    async function handleRegister(e) {
+        e.preventDefault();
+        const name     = document.getElementById('name').value.trim();
+        const email    = document.getElementById('email').value.trim();
+        const phone    = document.getElementById('phone').value.trim();
+        const password = document.getElementById('password').value;
+        const confirm  = document.getElementById('confirmPassword').value;
+        const btn      = document.getElementById('submitBtn');
+        const alertBox = document.getElementById('alertBox');
+
+        alertBox.innerHTML = '';
+
+        if (!name || !email || !password) {
+            alertBox.innerHTML = `<div class="alert alert-error">⚠️ Please fill in all required fields.</div>`;
+            return;
+        }
+        if (password.length < 6) {
+            alertBox.innerHTML = `<div class="alert alert-error">⚠️ Password must be at least 6 characters.</div>`;
+            return;
+        }
+        if (password !== confirm) {
+            alertBox.innerHTML = `<div class="alert alert-error">⚠️ Passwords do not match.</div>`;
+            return;
+        }
+
+        btn.disabled    = true;
+        btn.textContent = 'Creating account...';
+
+        try {
+            const res = await apiFetch('/auth/register', 'POST', { name, email, password, phone }, false);
+            saveAuth(res.data.token, { name: res.data.name, email: res.data.email, role: res.data.role });
+            showToast('Account created! Welcome, ' + res.data.name + ' 🎉', 'success');
+            setTimeout(() => window.location.href = 'restaurants.html', 600);
+        } catch (err) {
+            alertBox.innerHTML = `<div class="alert alert-error">❌ ${err.message}</div>`;
+            btn.disabled    = false;
+            btn.textContent = 'Create Account';
+        }
+    }
+
+    function togglePassword(id, btn) {
+        const input = document.getElementById(id);
+        if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
+        else                           { input.type = 'password'; btn.textContent = '👁️'; }
+    }
+
+    function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
+
+    window.addEventListener('scroll', () => {
+        document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu — FoodDash</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/pages.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar scrolled" id="navbar">
+    <div class="nav-container">
+        <a href="../index.html" class="nav-logo">🍔 FoodDash</a>
+        <ul class="nav-menu" id="navMenu">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="restaurants.html" class="nav-link">Restaurants</a></li>
+            <li><a href="orders.html" class="nav-link" id="ordersNavLink" style="display:none">My Orders</a></li>
+        </ul>
+        <div class="nav-actions">
+            <div id="guestActions">
+                <a href="login.html" class="btn btn-outline">Login</a>
+                <a href="register.html" class="btn btn-primary">Sign Up</a>
+            </div>
+            <div id="userActions" style="display:none">
+                <span class="nav-user" id="navUserName"></span>
+                <a href="orders.html" class="btn btn-outline">My Orders</a>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="container">
+
+        <!-- BACK BUTTON -->
+        <div style="padding:1.5rem 0 0">
+            <a href="restaurants.html" class="btn btn-gray btn-sm">← Back to Restaurants</a>
+        </div>
+
+        <!-- RESTAURANT HEADER -->
+        <div class="menu-restaurant-header" id="restaurantHeader">
+            <div class="loading-container"><div class="spinner"></div></div>
+        </div>
+
+        <!-- MENU + CART LAYOUT -->
+        <div class="menu-layout">
+
+            <!-- LEFT: MENU ITEMS -->
+            <div id="menuContent">
+                <div class="loading-container">
+                    <div class="spinner"></div>
+                    <p>Loading menu...</p>
+                </div>
+            </div>
+
+            <!-- RIGHT: CART PANEL -->
+            <div>
+                <!-- Mobile toggle -->
+                <button class="cart-panel-toggle btn btn-primary btn-block" id="cartPanelToggle"
+                        onclick="toggleCartPanel()" style="margin-bottom:0.5rem;display:none">
+                    🛒 View Cart (<span class="floating-cart-count">0</span>) — <span class="floating-cart-price">$0.00</span>
+                </button>
+
+                <div class="cart-panel" id="cartPanel">
+                    <div class="cart-header">
+                        <h3>🛒 Your Order</h3>
+                        <div class="cart-count-badge" id="cartCountBadge">0</div>
+                    </div>
+                    <div class="cart-body">
+                        <div id="cartItemsList">
+                            <div class="cart-empty">
+                                <div class="cart-empty-icon">🛒</div>
+                                <p>Your cart is empty</p>
+                                <p style="font-size:0.8rem;margin-top:0.3rem">Add items from the menu</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cart-footer">
+                        <div class="cart-subtotal">
+                            <span>Subtotal</span>
+                            <span id="cartSubtotal">$0.00</span>
+                        </div>
+                        <div class="cart-subtotal">
+                            <span>Delivery fee</span>
+                            <span>$2.99</span>
+                        </div>
+                        <div class="cart-total-row">
+                            <span>Total</span>
+                            <span id="cartTotal">$0.00</span>
+                        </div>
+                        <div class="cart-address">
+                            <label>📍 Delivery Address</label>
+                            <input type="text" id="deliveryAddress" class="form-control"
+                                   placeholder="Enter your delivery address...">
+                        </div>
+                        <button class="btn btn-success btn-block btn-lg" onclick="placeOrder()">
+                            Place Order 🚀
+                        </button>
+                        <button class="btn btn-gray btn-block btn-sm" style="margin-top:0.5rem"
+                                onclick="Cart.clear()">Clear Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FLOATING CART BUTTON (mobile) -->
+<button class="cart-btn" id="floatingCartBtn" onclick="toggleCartPanel()" style="display:none">
+    🛒 <span class="floating-cart-count">0</span> items —
+    <span class="floating-cart-price">$0.00</span>
+</button>
+
+<script src="../js/auth.js"></script>
+<script src="../js/cart.js"></script>
+<script>
+    const params         = new URLSearchParams(window.location.search);
+    const restaurantId   = params.get('id');
+    const restaurantName = decodeURIComponent(params.get('name') || 'Restaurant');
+
+    if (!restaurantId) window.location.href = 'restaurants.html';
+
+    const EMOJIS = { Italian:'🍕', American:'🍔', Japanese:'🍣', Mexican:'🌮', Chinese:'🍜', Indian:'🍛', default:'🍽️' };
+    const CATEGORY_ICONS = { Pizza:'🍕', Burgers:'🍔', Rolls:'🍣', Sashimi:'🐟', Soups:'🍲', Sides:'🍟', default:'🍽️' };
+
+    async function loadRestaurant() {
+        try {
+            const res = await apiFetch(`/restaurants/${restaurantId}`);
+            const r   = res.data;
+            const emoji = EMOJIS[r.cuisine] || EMOJIS.default;
+            document.title = `${r.name} — FoodDash`;
+            document.getElementById('restaurantHeader').innerHTML = `
+                <div class="menu-restaurant-emoji">${emoji}</div>
+                <div class="menu-restaurant-info">
+                    <h2>${r.name}</h2>
+                    <p>📍 ${r.address}</p>
+                    <div class="menu-restaurant-stats">
+                        <span class="menu-stat">⭐ <strong>${r.rating || '4.0'}</strong> Rating</span>
+                        <span class="menu-stat">🕐 <strong>30 min</strong> Delivery</span>
+                        <span class="menu-stat">🍽️ <strong>${r.cuisine}</strong></span>
+                    </div>
+                </div>`;
+        } catch (err) {
+            document.getElementById('restaurantHeader').innerHTML =
+                `<div class="alert alert-error">❌ ${err.message}</div>`;
+        }
+    }
+
+    async function loadMenu() {
+        const content = document.getElementById('menuContent');
+        try {
+            const res   = await apiFetch(`/restaurants/${restaurantId}/menu`);
+            const items = res.data;
+
+            if (items.length === 0) {
+                content.innerHTML = `<div class="empty-state"><div class="empty-icon">🍽️</div><h3>No menu items available</h3></div>`;
+                return;
+            }
+
+            // Group by category
+            const grouped = items.reduce((acc, item) => {
+                (acc[item.category] = acc[item.category] || []).push(item);
+                return acc;
+            }, {});
+
+            // Set restaurant in cart
+            Cart.setRestaurant(Number(restaurantId), restaurantName);
+
+            content.innerHTML = Object.entries(grouped).map(([category, catItems]) => {
+                const icon = CATEGORY_ICONS[category] || CATEGORY_ICONS.default;
+                return `
+                <div class="menu-category-title">${icon} ${category}</div>
+                ${catItems.map(item => {
+                    const inCart = Cart.getItems().find(i => i.menuItemId === item.id);
+                    const qty    = inCart ? inCart.quantity : 0;
+                    return `
+                    <div class="menu-item-card" id="item-card-${item.id}">
+                        <div class="menu-item-info">
+                            <h4>${item.name}</h4>
+                            <p>${item.description || ''}</p>
+                            <div class="item-category">${item.category}</div>
+                        </div>
+                        <div class="menu-item-right">
+                            <div class="menu-item-price">${formatPrice(item.price)}</div>
+                            ${qty === 0
+                                ? `<button class="btn btn-primary btn-sm" id="add-btn-${item.id}"
+                                          onclick="addItem(${item.id}, '${item.name.replace(/'/g,"\\'")}', ${item.price})">
+                                       + Add
+                                   </button>`
+                                : `<div class="qty-control" id="qty-control-${item.id}">
+                                       <button class="qty-btn" id="sub-${item.id}"
+                                               onclick="Cart.removeItem(${item.id}); refreshItemUI(${item.id}, '${item.name.replace(/'/g,"\\'")}', ${item.price})">−</button>
+                                       <span class="qty-num" id="qty-${item.id}">${qty}</span>
+                                       <button class="qty-btn" id="add-${item.id}"
+                                               onclick="Cart.addItem(${item.id}, '${item.name.replace(/'/g,"\\'")}', ${item.price}); refreshItemUI(${item.id}, '${item.name.replace(/'/g,"\\'")}', ${item.price})">+</button>
+                                   </div>`
+                            }
+                        </div>
+                    </div>`;
+                }).join('')}`;
+            }).join('');
+
+            Cart.renderAll();
+        } catch (err) {
+            content.innerHTML = `<div class="alert alert-error">❌ ${err.message}</div>`;
+        }
+    }
+
+    function addItem(id, name, price) {
+        if (!isLoggedIn()) {
+            showToast('Please login to add items to cart', 'error');
+            setTimeout(() => window.location.href = 'login.html', 1000);
+            return;
+        }
+        Cart.addItem(id, name, price);
+        refreshItemUI(id, name, price);
+        showToast(`${name} added to cart 🛒`, 'success');
+    }
+
+    function refreshItemUI(id, name, price) {
+        const item = Cart.getItems().find(i => i.menuItemId === id);
+        const qty  = item ? item.quantity : 0;
+        const right = document.querySelector(`#item-card-${id} .menu-item-right`);
+        if (!right) return;
+
+        const priceHtml = `<div class="menu-item-price">${formatPrice(price)}</div>`;
+        if (qty === 0) {
+            right.innerHTML = priceHtml + `
+                <button class="btn btn-primary btn-sm" id="add-btn-${id}"
+                        onclick="addItem(${id}, '${name.replace(/'/g,"\\'")}', ${price})">+ Add</button>`;
+        } else {
+            right.innerHTML = priceHtml + `
+                <div class="qty-control" id="qty-control-${id}">
+                    <button class="qty-btn" onclick="Cart.removeItem(${id}); refreshItemUI(${id}, '${name.replace(/'/g,"\\'")}', ${price})">−</button>
+                    <span class="qty-num" id="qty-${id}">${qty}</span>
+                    <button class="qty-btn" onclick="Cart.addItem(${id}, '${name.replace(/'/g,"\\'")}', ${price}); refreshItemUI(${id}, '${name.replace(/'/g,"\\'")}', ${price})">+</button>
+                </div>`;
+        }
+    }
+
+    async function placeOrder() {
+        if (!isLoggedIn()) {
+            showToast('Please login to place an order', 'error');
+            setTimeout(() => window.location.href = 'login.html', 1000);
+            return;
+        }
+        const items   = Cart.getItems();
+        const address = document.getElementById('deliveryAddress').value.trim();
+
+        if (items.length === 0) { showToast('Add items to your cart first!', 'error'); return; }
+        if (!address)           { showToast('Please enter a delivery address', 'error'); return; }
+
+        const btn = document.querySelector('.cart-footer .btn-success');
+        btn.disabled    = true;
+        btn.textContent = 'Placing order...';
+
+        try {
+            const res = await apiFetch('/orders', 'POST', {
+                restaurantId: Number(restaurantId),
+                deliveryAddress: address,
+                items: items.map(i => ({ menuItemId: i.menuItemId, quantity: i.quantity }))
+            });
+            Cart.clear();
+            showToast(`✅ Order #${res.data.id} placed! Check your email for updates.`, 'success');
+            setTimeout(() => window.location.href = 'orders.html', 1500);
+        } catch (err) {
+            showToast('❌ ' + err.message, 'error');
+            btn.disabled    = false;
+            btn.textContent = 'Place Order 🚀';
+        }
+    }
+
+    function toggleCartPanel() {
+        document.getElementById('cartPanel').classList.toggle('open');
+    }
+
+    function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
+
+    loadRestaurant();
+    loadMenu();
+</script>
+</body>
+</html>

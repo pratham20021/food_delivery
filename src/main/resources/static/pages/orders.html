@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Orders — FoodDash</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/pages.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar scrolled" id="navbar">
+    <div class="nav-container">
+        <a href="../index.html" class="nav-logo">🍔 FoodDash</a>
+        <ul class="nav-menu" id="navMenu">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="restaurants.html" class="nav-link">Restaurants</a></li>
+            <li><a href="orders.html" class="nav-link active" id="ordersNavLink">My Orders</a></li>
+        </ul>
+        <div class="nav-actions">
+            <div id="guestActions" style="display:none">
+                <a href="login.html" class="btn btn-outline">Login</a>
+            </div>
+            <div id="userActions" style="display:none">
+                <span class="nav-user" id="navUserName"></span>
+                <a href="restaurants.html" class="btn btn-outline">Order More</a>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+    </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+    <div class="container">
+        <h1>📦 My Orders</h1>
+        <p>Track all your orders in real-time</p>
+    </div>
+</div>
+
+<div class="page-wrapper">
+    <section class="orders-section">
+        <div class="container">
+
+            <!-- STATS ROW -->
+            <div id="orderStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem"></div>
+
+            <!-- FILTER TABS -->
+            <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+                <button class="chip active" data-filter="ALL"           onclick="filterOrders('ALL', this)">All Orders</button>
+                <button class="chip"        data-filter="ORDER_RECEIVED" onclick="filterOrders('ORDER_RECEIVED', this)">🟡 Received</button>
+                <button class="chip"        data-filter="PREPARING"      onclick="filterOrders('PREPARING', this)">🔵 Preparing</button>
+                <button class="chip"        data-filter="OUT_FOR_DELIVERY" onclick="filterOrders('OUT_FOR_DELIVERY', this)">🚴 On the Way</button>
+                <button class="chip"        data-filter="DELIVERED"      onclick="filterOrders('DELIVERED', this)">✅ Delivered</button>
+            </div>
+
+            <div id="ordersList">
+                <div class="loading-container">
+                    <div class="spinner"></div>
+                    <p>Loading your orders...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom" style="border:none;padding:1.5rem 0">
+            <p>© 2024 FoodDash. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/auth.js"></script>
+<script>
+    requireAuth();
+
+    const STEPS = ['ORDER_RECEIVED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+    const STEP_LABELS  = ['Received', 'Preparing', 'On the Way', 'Delivered'];
+    const STEP_ICONS   = ['📋', '👨‍🍳', '🚴', '✅'];
+    const STATUS_BADGE = {
+        ORDER_RECEIVED:   'badge-warning',
+        PREPARING:        'badge-info',
+        OUT_FOR_DELIVERY: 'badge-delivery',
+        DELIVERED:        'badge-success'
+    };
+    const STATUS_LABEL = {
+        ORDER_RECEIVED:   '🟡 Order Received',
+        PREPARING:        '🔵 Preparing',
+        OUT_FOR_DELIVERY: '🚴 Out for Delivery',
+        DELIVERED:        '✅ Delivered'
+    };
+
+    let allOrders    = [];
+    let activeFilter = 'ALL';
+
+    async function loadOrders() {
+        try {
+            const res = await apiFetch('/orders');
+            allOrders = res.data;
+            renderStats();
+            renderOrders();
+        } catch (err) {
+            document.getElementById('ordersList').innerHTML =
+                `<div class="alert alert-error">❌ ${err.message}</div>`;
+        }
+    }
+
+    function renderStats() {
+        const total     = allOrders.length;
+        const active    = allOrders.filter(o => o.status !== 'DELIVERED').length;
+        const delivered = allOrders.filter(o => o.status === 'DELIVERED').length;
+        const spent     = allOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+
+        document.getElementById('orderStats').innerHTML = [
+            { icon:'📦', label:'Total Orders',    value: total },
+            { icon:'🔄', label:'Active Orders',   value: active },
+            { icon:'✅', label:'Delivered',        value: delivered },
+            { icon:'💰', label:'Total Spent',      value: formatPrice(spent) }
+        ].map(s => `
+            <div style="background:white;border-radius:var(--radius-md);padding:1.2rem;text-align:center;box-shadow:var(--shadow-sm)">
+                <div style="font-size:1.8rem;margin-bottom:0.3rem">${s.icon}</div>
+                <div style="font-size:1.4rem;font-weight:800;color:var(--primary)">${s.value}</div>
+                <div style="font-size:0.8rem;color:var(--gray-700)">${s.label}</div>
+            </div>`).join('');
+    }
+
+    function renderOrders() {
+        const list = document.getElementById('ordersList');
+        const filtered = activeFilter === 'ALL'
+            ? allOrders
+            : allOrders.filter(o => o.status === activeFilter);
+
+        if (filtered.length === 0) {
+            list.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">${allOrders.length === 0 ? '🛒' : '🔍'}</div>
+                    <h3>${allOrders.length === 0 ? 'No orders yet' : 'No orders in this category'}</h3>
+                    <p>${allOrders.length === 0 ? 'Start ordering from your favourite restaurants!' : 'Try a different filter'}</p>
+                    ${allOrders.length === 0 ? `<a href="restaurants.html" class="btn btn-primary" style="margin-top:1rem">Browse Restaurants</a>` : ''}
+                </div>`;
+            return;
+        }
+
+        list.innerHTML = filtered.map(order => {
+            const stepIdx = STEPS.indexOf(order.status);
+            const fillPct = stepIdx === 0 ? 0 : (stepIdx / (STEPS.length - 1)) * 100;
+
+            const progressHtml = `
+                <div class="order-progress">
+                    <div class="order-progress-fill" style="width:${fillPct}%"></div>
+                    ${STEPS.map((s, i) => `
+                        <div class="progress-step">
+                            <div class="step-dot ${i < stepIdx ? 'done' : i === stepIdx ? 'current' : ''}">
+                                ${i < stepIdx ? '✓' : STEP_ICONS[i]}
+                            </div>
+                            <div class="step-label">${STEP_LABELS[i]}</div>
+                        </div>`).join('')}
+                </div>`;
+
+            const itemsText = (order.items || [])
+                .map(i => `${i.menuItem?.name || 'Item'} ×${i.quantity}`)
+                .join(' · ');
+
+            const createdAt = order.createdAt ? formatDate(order.createdAt) : '';
+
+            return `
+            <div class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <div class="order-id">Order #${order.id}</div>
+                        <div class="order-restaurant">🏪 ${order.restaurant?.name || ''}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <span class="badge ${STATUS_BADGE[order.status]}">${STATUS_LABEL[order.status]}</span>
+                        <div class="order-date" style="margin-top:0.3rem">${createdAt}</div>
+                    </div>
+                </div>
+                <div class="order-card-body">
+                    ${progressHtml}
+                    <div class="order-items-list">
+                        ${itemsText || 'No items'}
+                    </div>
+                </div>
+                <div class="order-card-footer">
+                    <div>
+                        <div class="order-total">${formatPrice(order.totalAmount)}</div>
+                        <div class="order-address">📍 ${order.deliveryAddress || ''}</div>
+                    </div>
+                    <a href="restaurants.html" class="btn btn-outline btn-sm">Reorder</a>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function filterOrders(status, btn) {
+        activeFilter = status;
+        document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        renderOrders();
+    }
+
+    function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
+
+    loadOrders();
+
+    // Auto-refresh active orders every 30 seconds
+    setInterval(() => {
+        if (allOrders.some(o => o.status !== 'DELIVERED')) loadOrders();
+    }, 30000);
+</script>
+</body>
+</html>
