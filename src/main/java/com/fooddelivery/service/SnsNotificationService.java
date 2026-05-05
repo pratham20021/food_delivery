@@ -20,10 +20,14 @@ public class SnsNotificationService {
 
     private final SnsClient snsClient;
 
-    @Value("${aws.sns.topic.arn}")
+    @Value("${aws.sns.topic.arn:}")
     private String topicArn;
 
     public void publishOrderStatusUpdate(Order order) {
+        if (topicArn == null || topicArn.isBlank()) {
+            log.warn("SNS_TOPIC_ARN not set — skipping notification for Order #{}", order.getId());
+            return;
+        }
         String subject = buildSubject(order.getStatus());
         String message = buildMessage(order);
 

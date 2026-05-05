@@ -1,5 +1,6 @@
 # Maven
 food-delivery/target/
+target/
 food-delivery/.mvn/wrapper/maven-wrapper.jar
 
 # Terraform — NEVER commit state or secrets
@@ -9,12 +10,13 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/tfplan
 terraform/tfplan.txt
-terraform/terraform.tfvars        # contains secrets
+terraform/terraform.tfvars
 terraform/*.auto.tfvars
 
-# Environment files
+# Environment files — NEVER commit real credentials
 .env
 *.env
+!.env.example
 /etc/food-delivery.env
 
 # IDE

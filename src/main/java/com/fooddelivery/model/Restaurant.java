@@ -21,6 +21,7 @@ public class Restaurant {
     private String imageUrl;
     private Double rating;
 
-    @OneToMany(mappedBy = "restaurant", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "restaurant", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<MenuItem> menuItems;
 }
