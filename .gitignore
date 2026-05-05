@@ -1,0 +1,35 @@
+# Maven
+food-delivery/target/
+food-delivery/.mvn/wrapper/maven-wrapper.jar
+
+# Terraform — NEVER commit state or secrets
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/tfplan
+terraform/tfplan.txt
+terraform/terraform.tfvars        # contains secrets
+terraform/*.auto.tfvars
+
+# Environment files
+.env
+*.env
+/etc/food-delivery.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
