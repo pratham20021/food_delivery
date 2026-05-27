@@ -53,11 +53,28 @@ module "security_groups" {
   app_port    = var.app_port
 }
 
+# ── Lambda ────────────────────────────────────────────────────────────────────
+module "lambda" {
+  source          = "./modules/lambda"
+  project         = var.project
+  environment     = var.environment
+  aws_region      = var.aws_region
+  sns_topic_arn   = module.sns.topic_arn
+  sns_topic_name  = module.sns.topic_name
+  db_host         = module.rds.db_endpoint
+  db_name         = var.db_name
+  db_username     = var.db_username
+  db_password     = var.db_password
+  subnet_ids      = module.vpc.public_subnet_ids
+  lambda_sg_id    = module.security_groups.lambda_sg_id
+  lambda_role_arn = module.iam.lambda_role_arn
+}
+
 # ── IAM ───────────────────────────────────────────────────────────────────────
 module "iam" {
-  source      = "./modules/iam"
-  project     = var.project
-  environment = var.environment
+  source        = "./modules/iam"
+  project       = var.project
+  environment   = var.environment
   sns_topic_arn = module.sns.topic_arn
 }
 
@@ -81,7 +98,7 @@ module "rds" {
   source              = "./modules/rds"
   project             = var.project
   environment         = var.environment
-  subnet_ids          = module.vpc.private_subnet_ids
+  subnet_ids          = module.vpc.public_subnet_ids
   security_group_id   = module.security_groups.rds_sg_id
   db_name             = var.db_name
   db_username         = var.db_username
@@ -103,12 +120,13 @@ module "ec2" {
   app_port            = var.app_port
 
   # Passed into user-data for bootstrap
-  ecr_repo_url        = module.ecr.repository_url
-  aws_region          = var.aws_region
-  db_endpoint         = module.rds.db_endpoint
-  db_name             = var.db_name
-  db_username         = var.db_username
-  db_password         = var.db_password
-  sns_topic_arn       = module.sns.topic_arn
-  jwt_secret          = var.jwt_secret
+  ecr_repo_url           = module.ecr.repository_url
+  aws_region             = var.aws_region
+  db_endpoint            = module.rds.db_endpoint
+  db_name                = var.db_name
+  db_username            = var.db_username
+  db_password            = var.db_password
+  sns_topic_arn          = module.sns.topic_arn
+  jwt_secret             = var.jwt_secret
+  sqs_order_queue_url    = module.lambda.order_processing_queue_url
 }

@@ -32,3 +32,28 @@ output "vpc_id" {
   description = "VPC ID"
   value       = module.vpc.vpc_id
 }
+
+output "order_processing_queue_url" {
+  description = "SQS URL for order processing (EC2 publishes here)"
+  value       = module.lambda.order_processing_queue_url
+}
+
+output "invoice_bucket_name" {
+  description = "S3 bucket for generated invoices"
+  value       = module.lambda.invoice_bucket_name
+}
+
+output "order_processor_lambda_arn" {
+  description = "ARN of the order_processor Lambda"
+  value       = module.lambda.order_processor_arn
+}
+
+output "notification_enricher_lambda_arn" {
+  description = "ARN of the notification_enricher Lambda"
+  value       = module.lambda.notification_enricher_arn
+}
+
+output "invoice_generator_lambda_arn" {
+  description = "ARN of the invoice_generator Lambda"
+  value       = module.lambda.invoice_generator_arn
+}

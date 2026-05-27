@@ -73,6 +73,13 @@
             <version>${aws.sdk.version}</version>
         </dependency>
 
+        <!-- AWS SQS SDK v2 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sqs</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+
         <!-- Actuator — health endpoint for EC2/ALB -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

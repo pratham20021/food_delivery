@@ -62,7 +62,7 @@ variable "ec2_ami_id" {
 variable "ec2_instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t3.small"
+  default     = "t2.micro"  # free tier eligible
 }
 
 variable "ec2_key_name" {
@@ -93,7 +93,7 @@ variable "db_password" {
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.t2.micro"  # free tier eligible
 }
 
 # ── SNS ───────────────────────────────────────────────────────────────────────

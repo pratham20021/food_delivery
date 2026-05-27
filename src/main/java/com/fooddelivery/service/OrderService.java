@@ -26,6 +26,7 @@ public class OrderService {
     private final RestaurantRepository restaurantRepository;
     private final MenuItemRepository menuItemRepository;
     private final SnsNotificationService snsService;
+    private final SqsPublisherService sqsPublisher;
 
     @Transactional
     public Order placeOrder(String userEmail, OrderRequest req) {
@@ -57,7 +58,8 @@ public class OrderService {
         order.setTotalAmount(items.stream().mapToDouble(i -> i.getPrice() * i.getQuantity()).sum());
 
         Order saved = orderRepository.save(order);
-        snsService.publishOrderStatusUpdate(saved);
+        sqsPublisher.publishOrderPlaced(saved);  // async processing via Lambda
+        snsService.publishOrderStatusUpdate(saved); // immediate customer notification
         log.info("Order #{} placed by {}", saved.getId(), userEmail);
         return saved;
     }

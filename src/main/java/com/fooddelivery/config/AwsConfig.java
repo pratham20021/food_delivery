@@ -10,6 +10,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 @Configuration
 public class AwsConfig {
@@ -19,32 +20,36 @@ public class AwsConfig {
     @Value("${aws.region}")
     private String region;
 
-    // Optional — if blank, falls back to DefaultCredentialsProvider (IAM role on EC2)
     @Value("${aws.access.key.id:}")
     private String accessKeyId;
 
     @Value("${aws.secret.access.key:}")
     private String secretAccessKey;
 
-    @Bean
-    public SnsClient snsClient() {
-        var builder = SnsClient.builder().region(Region.of(region));
-
+    private software.amazon.awssdk.auth.credentials.AwsCredentialsProvider credentialsProvider() {
         if (accessKeyId != null && !accessKeyId.isBlank() &&
             secretAccessKey != null && !secretAccessKey.isBlank()) {
-            // Explicit credentials — used locally or when not on EC2 with IAM role
-            builder.credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-                )
-            );
-            log.info("AWS SNS: using explicit credentials for region [{}]", region);
-        } else {
-            // IAM role / ~/.aws/credentials / environment variables
-            builder.credentialsProvider(DefaultCredentialsProvider.create());
-            log.info("AWS SNS: using DefaultCredentialsProvider for region [{}]", region);
+            log.info("AWS: using explicit credentials for region [{}]", region);
+            return StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey));
         }
+        log.info("AWS: using DefaultCredentialsProvider for region [{}]", region);
+        return DefaultCredentialsProvider.create();
+    }
 
-        return builder.build();
+    @Bean
+    public SnsClient snsClient() {
+        return SnsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
+    }
+
+    @Bean
+    public SqsClient sqsClient() {
+        return SqsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
     }
 }

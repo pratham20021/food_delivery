@@ -15,3 +15,4 @@ variable "db_username"          { type = string }
 variable "db_password"          { type = string; sensitive = true }
 variable "sns_topic_arn"        { type = string }
 variable "jwt_secret"           { type = string; sensitive = true }
+variable "sqs_order_queue_url"  { type = string }

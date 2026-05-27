@@ -12,6 +12,11 @@ terraform/tfplan
 terraform/tfplan.txt
 terraform/terraform.tfvars
 terraform/*.auto.tfvars
+terraform/modules/lambda/zips/
+
+# Lambda layer installed packages — installed by pipeline, not committed
+lambda/layers/db_utils/python/
+lambda/layers/aws_clients/python/
 
 # Environment files — NEVER commit real credentials
 .env
@@ -35,3 +40,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Jenkins
+jenkins/jenkins_home/

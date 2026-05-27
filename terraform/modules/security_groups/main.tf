@@ -37,7 +37,7 @@ resource "aws_security_group" "app" {
 # ── RDS SG ────────────────────────────────────────────────────────────────────
 resource "aws_security_group" "rds" {
   name        = "${var.project}-${var.environment}-rds-sg"
-  description = "Allow MySQL only from app security group"
+  description = "Allow MySQL only from app and Lambda security groups"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -48,6 +48,14 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.app.id]
   }
 
+  ingress {
+    description     = "MySQL from Lambda"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lambda.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -56,4 +64,20 @@ resource "aws_security_group" "rds" {
   }
 
   tags = { Name = "${var.project}-${var.environment}-rds-sg" }
+}
+
+# ── Lambda SG ─────────────────────────────────────────────────────────────────
+resource "aws_security_group" "lambda" {
+  name        = "${var.project}-${var.environment}-lambda-sg"
+  description = "Lambda functions — outbound only (RDS, AWS APIs)"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-${var.environment}-lambda-sg" }
 }
