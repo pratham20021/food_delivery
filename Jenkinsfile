@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION      = "us-east-1"
+        AWS_REGION      = "ap-south-1"
         PROJECT         = "food-delivery"
         ENVIRONMENT     = "dev"
         APP_PORT        = "8080"

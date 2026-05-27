@@ -97,9 +97,9 @@ Run these once before the first pipeline run:
 aws configure   # if not already done
 
 # State bucket
-aws s3 mb s3://food-delivery-tfstate --region us-east-1
+aws s3 mb s3://food-delivery-tfstate-ap-south-1 --region ap-south-1
 aws s3api put-bucket-versioning \
-    --bucket food-delivery-tfstate \
+    --bucket food-delivery-tfstate-ap-south-1 \
     --versioning-configuration Status=Enabled
 
 # Lock table
@@ -108,12 +108,12 @@ aws dynamodb create-table \
     --attribute-definitions AttributeName=LockID,AttributeType=S \
     --key-schema AttributeName=LockID,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
-    --region us-east-1
+    --region ap-south-1
 
 # EC2 key pair
 aws ec2 create-key-pair \
     --key-name food-delivery-key \
-    --region us-east-1 \
+    --region ap-south-1 \
     --query 'KeyMaterial' \
     --output text > food-delivery-key.pem
 chmod 400 food-delivery-key.pem

@@ -5,7 +5,7 @@
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-south-1"
 }
 
 variable "project" {
@@ -35,7 +35,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "List of AZs to spread subnets across"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
+  default     = ["ap-south-1a", "ap-south-1b"]
 }
 
 # ── Application ───────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ variable "jwt_secret" {
 variable "ec2_ami_id" {
   description = "Amazon Linux 2023 AMI ID (region-specific)"
   type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2023 us-east-1
+  default     = "ami-0f58b397bc5c1f2e8" # Amazon Linux 2023 ap-south-1
 }
 
 variable "ec2_instance_type" {
