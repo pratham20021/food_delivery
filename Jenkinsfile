@@ -3,11 +3,11 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION      = "ap-south-1"
-        PROJECT         = "food-delivery"
-        ENVIRONMENT     = "dev"
-        APP_PORT        = "8080"
-        TF_DIR          = "terraform"
+        AWS_REGION       = "ap-south-1"
+        PROJECT          = "food-delivery"
+        ENVIRONMENT      = "dev"
+        APP_PORT         = "8080"
+        TF_DIR           = "terraform"
         TF_IN_AUTOMATION = "true"
     }
 
@@ -32,7 +32,7 @@ pipeline {
         // ── 2. Build JAR ──────────────────────────────────────────────────────
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests --batch-mode -q'
+                bat 'mvn clean package -DskipTests --batch-mode -q'
             }
             post {
                 success {
@@ -44,10 +44,10 @@ pipeline {
         // ── 3. Install Lambda Layer Dependencies ──────────────────────────────
         stage('Lambda Layers') {
             steps {
-                sh '''
-                    pip3 install pymysql -t lambda/layers/db_utils/python/ --quiet
-                    pip3 install boto3   -t lambda/layers/aws_clients/python/ --quiet
-                    echo "Lambda layers ready"
+                bat '''
+                    pip install pymysql -t lambda\\layers\\db_utils\\python\\ --quiet
+                    pip install boto3   -t lambda\\layers\\aws_clients\\python\\ --quiet
+                    echo Lambda layers ready
                 '''
             }
         }
@@ -62,14 +62,14 @@ pipeline {
                     string(credentialsId: 'tf-notification-email', variable: 'TF_VAR_notification_email'),
                     string(credentialsId: 'tf-jwt-secret',         variable: 'TF_VAR_jwt_secret')
                 ]) {
-                    sh '''
-                        cd ${TF_DIR}
+                    bat '''
+                        cd %TF_DIR%
                         terraform init -input=false
-                        terraform apply -target=module.ecr \
-                            -auto-approve \
-                            -input=false \
-                            -var="aws_region=${AWS_REGION}" \
-                            -var="environment=${ENVIRONMENT}"
+                        terraform apply -target=module.ecr ^
+                            -auto-approve ^
+                            -input=false ^
+                            -var="aws_region=%AWS_REGION%" ^
+                            -var="environment=%ENVIRONMENT%"
                     '''
                 }
             }
@@ -83,26 +83,20 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     script {
-                        def accountId = sh(
+                        def accountId = bat(
                             script: 'aws sts get-caller-identity --query Account --output text',
                             returnStdout: true
-                        ).trim()
+                        ).trim().readLines().last()
 
-                        env.ECR_URL = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT}-${ENVIRONMENT}"
+                        env.ECR_URL   = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT}-${ENVIRONMENT}"
                         env.IMAGE_TAG = env.BUILD_NUMBER
 
-                        sh """
-                            aws ecr get-login-password --region ${AWS_REGION} | \
-                                docker login --username AWS --password-stdin ${env.ECR_URL}
-
-                            docker build -t ${env.ECR_URL}:${env.IMAGE_TAG} \
-                                         -t ${env.ECR_URL}:latest .
-
+                        bat """
+                            aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin ${env.ECR_URL}
+                            docker build -t ${env.ECR_URL}:${env.IMAGE_TAG} -t ${env.ECR_URL}:latest .
                             docker push ${env.ECR_URL}:${env.IMAGE_TAG}
                             docker push ${env.ECR_URL}:latest
-
-                            docker rmi ${env.ECR_URL}:${env.IMAGE_TAG} \
-                                       ${env.ECR_URL}:latest || true
+                            docker rmi ${env.ECR_URL}:${env.IMAGE_TAG} ${env.ECR_URL}:latest || exit 0
                         """
                     }
                 }
@@ -119,13 +113,13 @@ pipeline {
                     string(credentialsId: 'tf-notification-email', variable: 'TF_VAR_notification_email'),
                     string(credentialsId: 'tf-jwt-secret',         variable: 'TF_VAR_jwt_secret')
                 ]) {
-                    sh '''
-                        cd ${TF_DIR}
-                        terraform apply \
-                            -auto-approve \
-                            -input=false \
-                            -var="aws_region=${AWS_REGION}" \
-                            -var="environment=${ENVIRONMENT}"
+                    bat '''
+                        cd %TF_DIR%
+                        terraform apply ^
+                            -auto-approve ^
+                            -input=false ^
+                            -var="aws_region=%AWS_REGION%" ^
+                            -var="environment=%ENVIRONMENT%"
                     '''
                 }
             }
@@ -139,10 +133,10 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     script {
-                        env.APP_IP = sh(
-                            script: "cd ${TF_DIR} && terraform output -raw app_public_ip",
+                        env.APP_IP = bat(
+                            script: "cd %TF_DIR% && terraform output -raw app_public_ip",
                             returnStdout: true
-                        ).trim()
+                        ).trim().readLines().last()
 
                         env.APP_URL = "http://${env.APP_IP}:${APP_PORT}"
                         echo "App deployed at: ${env.APP_URL}"
@@ -160,10 +154,10 @@ pipeline {
 
                     def healthy = false
                     for (int i = 1; i <= 10; i++) {
-                        def status = sh(
-                            script: "curl -s -o /dev/null -w '%{http_code}' ${env.APP_URL}/actuator/health || echo 000",
+                        def status = bat(
+                            script: "curl -s -o NUL -w \"%%{http_code}\" ${env.APP_URL}/actuator/health",
                             returnStdout: true
-                        ).trim()
+                        ).trim().readLines().last()
 
                         if (status == '200') {
                             echo "App is UP at ${env.APP_URL}"
@@ -184,22 +178,31 @@ pipeline {
         // ── 9. Smoke Test ─────────────────────────────────────────────────────
         stage('Smoke Test') {
             steps {
-                sh """
-                    echo "--- Register user ---"
-                    curl -s -X POST ${env.APP_URL}/api/auth/register \
-                        -H 'Content-Type: application/json' \
-                        -d '{"name":"CI Test","email":"ci@test.com","password":"password123"}' \
-                        | python3 -m json.tool || true
+                script {
+                    bat """
+                        echo --- Register user ---
+                        curl -s -X POST ${env.APP_URL}/api/auth/register ^
+                            -H "Content-Type: application/json" ^
+                            -d "{\\"name\\":\\"CI Test\\",\\"email\\":\\"ci@test.com\\",\\"password\\":\\"password123\\"}"
+                    """
 
-                    echo "--- Get restaurants ---"
-                    TOKEN=\$(curl -s -X POST ${env.APP_URL}/api/auth/login \
-                        -H 'Content-Type: application/json' \
-                        -d '{"email":"ci@test.com","password":"password123"}' \
-                        | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
+                    def tokenResponse = bat(
+                        script: """
+                            curl -s -X POST ${env.APP_URL}/api/auth/login ^
+                                -H "Content-Type: application/json" ^
+                                -d "{\\"email\\":\\"ci@test.com\\",\\"password\\":\\"password123\\"}"
+                        """,
+                        returnStdout: true
+                    ).trim().readLines().last()
 
-                    curl -s -H "Authorization: Bearer \$TOKEN" \
-                        ${env.APP_URL}/api/restaurants | python3 -m json.tool || true
-                """
+                    def token = new groovy.json.JsonSlurper().parseText(tokenResponse)?.token ?: ''
+                    echo "Token received: ${token ? 'YES' : 'NO'}"
+
+                    bat """
+                        echo --- Get restaurants ---
+                        curl -s -H "Authorization: Bearer ${token}" ${env.APP_URL}/api/restaurants
+                    """
+                }
             }
         }
     }
@@ -207,18 +210,18 @@ pipeline {
     post {
         success {
             echo """
-            ╔══════════════════════════════════════════╗
-            ║   DEPLOYMENT SUCCESSFUL                  ║
-            ║   Build  : #${env.BUILD_NUMBER}
-            ║   App URL: ${env.APP_URL ?: 'see Capture Outputs stage'}
-            ╚══════════════════════════════════════════╝
+            ===========================================
+               DEPLOYMENT SUCCESSFUL
+               Build  : #${env.BUILD_NUMBER}
+               App URL: ${env.APP_URL ?: 'see Capture Outputs stage'}
+            ===========================================
             """
         }
         failure {
-            echo "FAILED — Build #${env.BUILD_NUMBER} — check logs above"
+            echo "FAILED - Build #${env.BUILD_NUMBER} - check logs above"
         }
         always {
-            sh 'docker logout || true'
+            bat 'docker logout || exit 0'
             cleanWs()
         }
     }
