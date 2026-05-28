@@ -1,6 +1,5 @@
 ###############################################################################
 # ROOT MAIN — Food Delivery Infrastructure
-# Orchestrates: VPC → Security Groups → IAM → ECR → SNS → RDS → EC2
 ###############################################################################
 
 terraform {
@@ -13,7 +12,6 @@ terraform {
     }
   }
 
-  # Remote state — swap bucket/key to match your account
   backend "s3" {
     bucket         = "food-delivery-tfstate-753668405724-dev"
     key            = "food-delivery/terraform.tfstate"
@@ -35,7 +33,6 @@ provider "aws" {
   }
 }
 
-# ── VPC ───────────────────────────────────────────────────────────────────────
 module "vpc" {
   source      = "./modules/vpc"
   project     = var.project
@@ -44,7 +41,6 @@ module "vpc" {
   azs         = var.availability_zones
 }
 
-# ── Security Groups ───────────────────────────────────────────────────────────
 module "security_groups" {
   source      = "./modules/security_groups"
   project     = var.project
@@ -53,7 +49,37 @@ module "security_groups" {
   app_port    = var.app_port
 }
 
-# ── Lambda ────────────────────────────────────────────────────────────────────
+module "sns" {
+  source      = "./modules/sns"
+  project     = var.project
+  environment = var.environment
+}
+
+module "iam" {
+  source        = "./modules/iam"
+  project       = var.project
+  environment   = var.environment
+  sns_topic_arn = module.sns.topic_arn
+}
+
+module "ecr" {
+  source      = "./modules/ecr"
+  project     = var.project
+  environment = var.environment
+}
+
+module "rds" {
+  source            = "./modules/rds"
+  project           = var.project
+  environment       = var.environment
+  subnet_ids        = module.vpc.public_subnet_ids
+  security_group_id = module.security_groups.rds_sg_id
+  db_name           = var.db_name
+  db_username       = var.db_username
+  db_password       = var.db_password
+  db_instance_class = var.db_instance_class
+}
+
 module "lambda" {
   source          = "./modules/lambda"
   project         = var.project
@@ -71,64 +97,25 @@ module "lambda" {
   ses_from_email  = var.notification_email
 }
 
-# ── IAM ───────────────────────────────────────────────────────────────────────
-module "iam" {
-  source        = "./modules/iam"
-  project       = var.project
-  environment   = var.environment
-  sns_topic_arn = module.sns.topic_arn
-}
-
-# ── ECR ───────────────────────────────────────────────────────────────────────
-module "ecr" {
-  source      = "./modules/ecr"
-  project     = var.project
-  environment = var.environment
-}
-
-# ── SNS ───────────────────────────────────────────────────────────────────────
-module "sns" {
-  source             = "./modules/sns"
-  project            = var.project
-  environment        = var.environment
-  notification_email = var.notification_email
-}
-
-# ── RDS ───────────────────────────────────────────────────────────────────────
-module "rds" {
-  source              = "./modules/rds"
-  project             = var.project
-  environment         = var.environment
-  subnet_ids          = module.vpc.public_subnet_ids
-  security_group_id   = module.security_groups.rds_sg_id
-  db_name             = var.db_name
-  db_username         = var.db_username
-  db_password         = var.db_password
-  db_instance_class   = var.db_instance_class
-}
-
-# ── EC2 ───────────────────────────────────────────────────────────────────────
 module "ec2" {
-  source              = "./modules/ec2"
-  project             = var.project
-  environment         = var.environment
-  subnet_id           = module.vpc.public_subnet_ids[0]
-  security_group_id   = module.security_groups.app_sg_id
+  source               = "./modules/ec2"
+  project              = var.project
+  environment          = var.environment
+  subnet_id            = module.vpc.public_subnet_ids[0]
+  security_group_id    = module.security_groups.app_sg_id
   iam_instance_profile = module.iam.instance_profile_name
-  ami_id              = var.ec2_ami_id
-  instance_type       = var.ec2_instance_type
-  key_name            = var.ec2_key_name
-  app_port            = var.app_port
-
-  # Passed into user-data for bootstrap
-  ecr_repo_url           = module.ecr.repository_url
-  aws_region             = var.aws_region
-  db_endpoint            = module.rds.db_endpoint
-  db_name                = var.db_name
-  db_username            = var.db_username
-  db_password            = var.db_password
-  sns_topic_arn          = module.sns.topic_arn
-  jwt_secret             = var.jwt_secret
-  sqs_order_queue_url    = module.lambda.order_processing_queue_url
-  ses_from_email         = var.notification_email
+  ami_id               = var.ec2_ami_id
+  instance_type        = var.ec2_instance_type
+  key_name             = var.ec2_key_name
+  app_port             = var.app_port
+  ecr_repo_url         = module.ecr.repository_url
+  aws_region           = var.aws_region
+  db_endpoint          = module.rds.db_endpoint
+  db_name              = var.db_name
+  db_username          = var.db_username
+  db_password          = var.db_password
+  sns_topic_arn        = module.sns.topic_arn
+  jwt_secret           = var.jwt_secret
+  sqs_order_queue_url  = module.lambda.order_processing_queue_url
+  ses_from_email       = var.notification_email
 }

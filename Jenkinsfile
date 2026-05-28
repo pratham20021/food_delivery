@@ -21,7 +21,6 @@ pipeline {
 
     stages {
 
-        // ── 1. Checkout ───────────────────────────────────────────────────────
         stage('Checkout') {
             steps {
                 git credentialsId: 'github-credentials',
@@ -30,7 +29,6 @@ pipeline {
             }
         }
 
-        // ── 2. Build JAR ──────────────────────────────────────────────────────
         stage('Build') {
             steps {
                 bat 'mvn clean package -DskipTests --batch-mode -q'
@@ -40,7 +38,6 @@ pipeline {
             }
         }
 
-        // ── 3. Lambda Layer Dependencies ──────────────────────────────────────
         stage('Lambda Layers') {
             steps {
                 bat """
@@ -51,7 +48,6 @@ pipeline {
             }
         }
 
-        // ── 4. Terraform ECR ──────────────────────────────────────────────────
         stage('Terraform ECR') {
             steps {
                 withCredentials([
@@ -73,7 +69,6 @@ pipeline {
             }
         }
 
-        // ── 5. Docker Build & Push ─────────────────────────────────────────────
         stage('Docker Build & Push to ECR') {
             steps {
                 withCredentials([
@@ -101,7 +96,6 @@ pipeline {
             }
         }
 
-        // ── 6. Terraform Full Apply ───────────────────────────────────────────
         stage('Terraform Apply') {
             steps {
                 withCredentials([
@@ -123,7 +117,6 @@ pipeline {
             }
         }
 
-        // ── 7. Capture Outputs & Store in SSM ────────────────────────────────
         stage('Capture Outputs') {
             steps {
                 withCredentials([
@@ -169,13 +162,21 @@ pipeline {
                             aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/jwt-secret     --value "%JWT_SECRET%"         --type SecureString --overwrite
                         """
                         echo "SSM parameters stored"
+
+                        // Also subscribe email to SNS if not already confirmed
+                        bat """
+                            aws sns subscribe --region %AWS_REGION% ^
+                                --topic-arn "${env.SNS_TOPIC_ARN}" ^
+                                --protocol email ^
+                                --notification-endpoint "%SES_FROM_EMAIL%" 2>nul || echo SNS subscription already exists
+                        """
                     }
                 }
             }
         }
 
-        // ── 8. Deploy to EC2 via SSM ──────────────────────────────────────────
-        // Uses --cli-input-json file to avoid Windows quoting issues entirely.
+        // Deploy to EC2 via SSM — writes a shell script to S3 then runs it on EC2
+        // This avoids ALL quoting issues: the script file has no escaping problems
         stage('Deploy to EC2') {
             steps {
                 withCredentials([
@@ -192,29 +193,73 @@ pipeline {
 
                         echo "Deploying to EC2: ${instanceId}"
 
-                        // The deploy command that runs on EC2 — reads all secrets from SSM
-                        def deployCmd = [
-                            'R=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)',
-                            'ECR=$(aws ssm get-parameter --region $R --name /food-delivery/dev/ecr-url --query Parameter.Value --output text)',
-                            'DB_URL=$(aws ssm get-parameter --region $R --name /food-delivery/dev/db-url --query Parameter.Value --output text)',
-                            'DB_PASS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/db-password --with-decryption --query Parameter.Value --output text)',
-                            'SNS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/sns-topic-arn --query Parameter.Value --output text)',
-                            'SQS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/sqs-queue-url --query Parameter.Value --output text)',
-                            'SES=$(aws ssm get-parameter --region $R --name /food-delivery/dev/ses-from-email --query Parameter.Value --output text)',
-                            'JWT=$(aws ssm get-parameter --region $R --name /food-delivery/dev/jwt-secret --with-decryption --query Parameter.Value --output text)',
-                            'aws ecr get-login-password --region $R | docker login --username AWS --password-stdin $ECR',
-                            'docker pull $ECR:latest',
-                            'docker stop food-delivery 2>/dev/null || true',
-                            'docker rm food-delivery 2>/dev/null || true',
-                            'docker run -d --name food-delivery --restart unless-stopped -p 8080:8080 -e AWS_REGION=$R -e SNS_TOPIC_ARN=$SNS -e SQS_ORDER_QUEUE_URL=$SQS -e SES_FROM_EMAIL=$SES -e JWT_SECRET=$JWT -e DB_USERNAME=admin -e DB_PASSWORD=$DB_PASS -e SPRING_DATASOURCE_URL=$DB_URL $ECR:latest',
-                            'sleep 15',
-                            'docker ps | grep food-delivery',
-                            'docker logs food-delivery --tail 30'
-                        ].join(' && ')
+                        // Write deploy script — use single quotes so Groovy does NOT interpolate $
+                        // All $ variables are bash variables evaluated on EC2
+                        def region = 'ap-south-1'
+                        def deployScript = '''\
+#!/bin/bash
+set -euo pipefail
+exec > /tmp/deploy.log 2>&1
 
-                        // Write SSM input as JSON file — avoids ALL Windows quoting issues
-                        def ssmJson = """{"InstanceIds":["${instanceId}"],"DocumentName":"AWS-RunShellScript","Parameters":{"commands":["${deployCmd.replace('\\', '\\\\').replace('"', '\\"')}"]},"TimeoutSeconds":180}"""
+REGION=ap-south-1
+echo "=== Reading config from SSM ==="
+ECR=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/ecr-url --query Parameter.Value --output text)
+DB_URL=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/db-url --query Parameter.Value --output text)
+DB_PASS=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/db-password --with-decryption --query Parameter.Value --output text)
+SNS=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/sns-topic-arn --query Parameter.Value --output text)
+SQS=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/sqs-queue-url --query Parameter.Value --output text)
+SES=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/ses-from-email --query Parameter.Value --output text)
+JWT=$(aws ssm get-parameter --region $REGION --name /food-delivery/dev/jwt-secret --with-decryption --query Parameter.Value --output text)
 
+echo "ECR=$ECR"
+echo "SNS=$SNS"
+echo "SES=$SES"
+
+echo "=== ECR Login ==="
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR
+
+echo "=== Pull latest image ==="
+docker pull $ECR:latest
+
+echo "=== Stop old container ==="
+docker stop food-delivery 2>/dev/null || true
+docker rm   food-delivery 2>/dev/null || true
+
+echo "=== Start new container ==="
+docker run -d \
+  --name food-delivery \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e AWS_REGION=$REGION \
+  -e SNS_TOPIC_ARN=$SNS \
+  -e SQS_ORDER_QUEUE_URL=$SQS \
+  -e SES_FROM_EMAIL=$SES \
+  -e JWT_SECRET=$JWT \
+  -e DB_USERNAME=admin \
+  -e DB_PASSWORD=$DB_PASS \
+  -e SPRING_DATASOURCE_URL="$DB_URL" \
+  $ECR:latest
+
+echo "=== Waiting 15s ==="
+sleep 15
+docker ps | grep food-delivery
+docker logs food-delivery --tail 30
+echo "=== Deploy complete ==="
+'''
+                        // Write script to file, upload to S3, run on EC2 via SSM
+                        writeFile file: 'deploy.sh', text: deployScript
+
+                        def invoiceBucket = bat(
+                            script: "cd %TF_DIR% && terraform output -raw invoice_bucket_name",
+                            returnStdout: true
+                        ).trim().readLines().last()
+
+                        // Upload script to S3
+                        bat "aws s3 cp deploy.sh s3://${invoiceBucket}/scripts/deploy.sh --region %AWS_REGION%"
+
+                        // Build SSM JSON — single command: download from S3 and run
+                        def ssmCmd = "aws s3 cp s3://${invoiceBucket}/scripts/deploy.sh /tmp/deploy.sh --region ${region} && chmod +x /tmp/deploy.sh && /tmp/deploy.sh && cat /tmp/deploy.log"
+                        def ssmJson = """{"InstanceIds":["${instanceId}"],"DocumentName":"AWS-RunShellScript","Parameters":{"commands":["${ssmCmd}"]},"TimeoutSeconds":180}"""
                         writeFile file: 'ssm-deploy.json', text: ssmJson
 
                         def cmdId = bat(
@@ -222,8 +267,7 @@ pipeline {
                             returnStdout: true
                         ).trim().readLines().last()
 
-                        echo "SSM Command ID: ${cmdId}"
-                        echo "Waiting 90s for deploy to complete..."
+                        echo "SSM Command ID: ${cmdId} — waiting 90s..."
                         sleep(90)
 
                         bat """aws ssm get-command-invocation ^
@@ -237,7 +281,6 @@ pipeline {
             }
         }
 
-        // ── 9. Health Check ───────────────────────────────────────────────────
         stage('Health Check') {
             steps {
                 script {
@@ -256,12 +299,11 @@ pipeline {
                         echo "Attempt ${i}/15 - HTTP ${status} - retrying in 20s..."
                         sleep(20)
                     }
-                    if (!healthy) echo "WARNING: App may still be starting — check ${env.APP_URL}/actuator/health"
+                    if (!healthy) echo "WARNING: check ${env.APP_URL}/actuator/health"
                 }
             }
         }
 
-        // ── 10. Smoke Test ────────────────────────────────────────────────────
         stage('Smoke Test') {
             steps {
                 script {

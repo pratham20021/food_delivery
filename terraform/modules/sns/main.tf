@@ -1,6 +1,10 @@
 ###############################################################################
 # MODULE: SNS
-# Creates: SNS topic for order notifications + email subscription
+# Creates: SNS topic only.
+# NOTE: Email subscription is managed manually (not by Terraform) to prevent
+#       it from being recreated on every apply which deactivates confirmation.
+#       Run once manually:
+#       aws sns subscribe --topic-arn <arn> --protocol email --notification-endpoint <email>
 ###############################################################################
 
 resource "aws_sns_topic" "orders" {
@@ -8,17 +12,4 @@ resource "aws_sns_topic" "orders" {
   display_name = "Food Delivery Order Notifications"
 
   tags = { Name = "${var.project}-${var.environment}-sns" }
-}
-
-resource "aws_sns_topic_subscription" "email" {
-  topic_arn = aws_sns_topic.orders.arn
-  protocol  = "email"
-  endpoint  = var.notification_email
-
-  # Prevent Terraform from destroying/recreating this on every apply.
-  # Recreating it deactivates the confirmed subscription and requires
-  # the user to re-confirm every pipeline run.
-  lifecycle {
-    ignore_changes = [endpoint]
-  }
 }
