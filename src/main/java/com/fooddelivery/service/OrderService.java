@@ -27,6 +27,7 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final SnsNotificationService snsService;
     private final SqsPublisherService sqsPublisher;
+    private final InvoiceService invoiceService;
 
     @Transactional
     public Order placeOrder(String userEmail, OrderRequest req) {
@@ -75,6 +76,9 @@ public class OrderService {
 
         Order updated = orderRepository.save(order);
         snsService.publishOrderStatusUpdate(updated);
+        if (newStatus == Order.OrderStatus.DELIVERED) {
+            invoiceService.sendInvoiceEmail(updated);
+        }
         log.info("Order #{} status updated to {}", orderId, newStatus);
         return updated;
     }

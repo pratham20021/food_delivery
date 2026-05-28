@@ -16,3 +16,4 @@ variable "db_password"          { type = string }
 variable "sns_topic_arn"        { type = string }
 variable "jwt_secret"           { type = string }
 variable "sqs_order_queue_url"  { type = string }
+variable "ses_from_email"       { type = string }

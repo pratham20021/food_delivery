@@ -32,6 +32,7 @@ public class SqsPublisherService {
         try {
             String body = objectMapper.writeValueAsString(Map.of(
                 "orderId",         order.getId(),
+                "action",          "PROCESS_ORDER",
                 "customerEmail",   order.getUser().getEmail(),
                 "customerName",    order.getUser().getName(),
                 "restaurantId",    order.getRestaurant().getId(),

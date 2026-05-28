@@ -18,18 +18,25 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
 }
 
-# ── SNS Publish Policy ────────────────────────────────────────────────────────
+# ── SNS + SES Publish Policy (EC2) ──────────────────────────────────────────
 resource "aws_iam_policy" "sns_publish" {
   name        = "${var.project}-${var.environment}-sns-publish"
-  description = "Allow EC2 to publish to the order notifications SNS topic"
+  description = "Allow EC2 to publish to SNS and send SES emails"
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["sns:Publish", "sns:GetTopicAttributes"]
-      Resource = var.sns_topic_arn
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sns:Publish", "sns:GetTopicAttributes"]
+        Resource = var.sns_topic_arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = "*"
+      }
+    ]
   })
 }
 
@@ -108,7 +115,7 @@ resource "aws_iam_role_policy_attachment" "lambda_sns" {
   policy_arn = aws_iam_policy.sns_publish.arn
 }
 
-# SQS + S3 + RDS access for Lambda — attached after Lambda resources exist
+# SQS + S3 + SES access for Lambda
 resource "aws_iam_policy" "lambda_app" {
   name = "${var.project}-${var.environment}-lambda-app-policy"
   policy = jsonencode({
@@ -128,6 +135,11 @@ resource "aws_iam_policy" "lambda_app" {
       {
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
         Resource = "*"
       }
     ]

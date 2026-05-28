@@ -9,6 +9,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
@@ -35,6 +36,14 @@ public class AwsConfig {
         }
         log.info("AWS: using DefaultCredentialsProvider for region [{}]", region);
         return DefaultCredentialsProvider.create();
+    }
+
+    @Bean
+    public SesClient sesClient() {
+        return SesClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
     }
 
     @Bean

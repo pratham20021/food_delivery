@@ -97,17 +97,40 @@
 
     let allOrders    = [];
     let activeFilter = 'ALL';
+    let pollTimer    = null;
 
     async function loadOrders() {
         try {
             const res = await apiFetch('/orders');
-            allOrders = res.data;
+            allOrders = res.data || [];
             renderStats();
             renderOrders();
         } catch (err) {
             document.getElementById('ordersList').innerHTML =
                 `<div class="alert alert-error">❌ ${err.message}</div>`;
         }
+    }
+
+    function startPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(async () => {
+            try {
+                const res = await apiFetch('/orders');
+                const fresh = res.data || [];
+                // Only re-render if something actually changed
+                if (JSON.stringify(fresh.map(o=>({id:o.id,s:o.status}))) !==
+                    JSON.stringify(allOrders.map(o=>({id:o.id,s:o.status})))) {
+                    allOrders = fresh;
+                    renderStats();
+                    renderOrders();
+                }
+                // Stop polling once all orders are delivered
+                if (allOrders.length > 0 && allOrders.every(o => o.status === 'DELIVERED')) {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                }
+            } catch (e) { /* silent — keep polling */ }
+        }, 5000);
     }
 
     function renderStats() {
@@ -206,12 +229,7 @@
 
     function toggleMenu() { document.getElementById('navMenu').classList.toggle('open'); }
 
-    loadOrders();
-
-    // Auto-refresh active orders every 30 seconds
-    setInterval(() => {
-        if (allOrders.some(o => o.status !== 'DELIVERED')) loadOrders();
-    }, 30000);
+    loadOrders().then(startPolling);
 </script>
 </body>
 </html>

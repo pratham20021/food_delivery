@@ -68,6 +68,7 @@ module "lambda" {
   subnet_ids      = module.vpc.public_subnet_ids
   lambda_sg_id    = module.security_groups.lambda_sg_id
   lambda_role_arn = module.iam.lambda_role_arn
+  ses_from_email  = var.notification_email
 }
 
 # ── IAM ───────────────────────────────────────────────────────────────────────
@@ -129,4 +130,5 @@ module "ec2" {
   sns_topic_arn          = module.sns.topic_arn
   jwt_secret             = var.jwt_secret
   sqs_order_queue_url    = module.lambda.order_processing_queue_url
+  ses_from_email         = var.notification_email
 }

@@ -7,9 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -18,33 +17,49 @@ public class OrderStatusScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OrderStatusScheduler.class);
 
-    private final OrderRepository orderRepository;
+    private final OrderRepository        orderRepository;
+    private final OrderStatusUpdater     statusUpdater;
     private final SnsNotificationService snsService;
+    private final InvoiceService         invoiceService;
 
     @Scheduled(fixedDelay = 5000)
-    @Transactional
     public void progressOrderStatuses() {
+
+        // 1. Read active orders — no transaction, just a plain read
         List<Order> activeOrders = orderRepository.findByStatusIn(List.of(
                 Order.OrderStatus.ORDER_RECEIVED,
                 Order.OrderStatus.PREPARING,
                 Order.OrderStatus.OUT_FOR_DELIVERY
         ));
 
-        for (Order order : activeOrders) {
-            Order.OrderStatus next = switch (order.getStatus()) {
-                case ORDER_RECEIVED   -> Order.OrderStatus.PREPARING;
-                case PREPARING        -> Order.OrderStatus.OUT_FOR_DELIVERY;
-                case OUT_FOR_DELIVERY -> Order.OrderStatus.DELIVERED;
-                default               -> null;
-            };
+        if (activeOrders.isEmpty()) return;
 
-            if (next != null) {
-                order.setStatus(next);
-                order.setUpdatedAt(LocalDateTime.now());
-                orderRepository.save(order);
-                snsService.publishOrderStatusUpdate(order);
-                log.info("Auto-progressed Order #{} to {}", order.getId(), next);
+        // 2. Commit each status change in its own isolated transaction via separate bean
+        //    A failed SNS/SES call can NEVER roll back the DB write
+        List<Order> progressed = new ArrayList<>();
+        for (Order order : activeOrders) {
+            Order.OrderStatus next = nextStatus(order.getStatus());
+            if (next == null) continue;
+
+            Order saved = statusUpdater.saveStatusChange(order.getId(), next);
+            if (saved != null) progressed.add(saved);
+        }
+
+        // 3. Fire notifications AFTER all DB commits — fully outside any transaction
+        for (Order order : progressed) {
+            snsService.publishOrderStatusUpdate(order);
+            if (order.getStatus() == Order.OrderStatus.DELIVERED) {
+                invoiceService.sendInvoiceEmail(order);
             }
         }
+    }
+
+    private Order.OrderStatus nextStatus(Order.OrderStatus current) {
+        return switch (current) {
+            case ORDER_RECEIVED   -> Order.OrderStatus.PREPARING;
+            case PREPARING        -> Order.OrderStatus.OUT_FOR_DELIVERY;
+            case OUT_FOR_DELIVERY -> Order.OrderStatus.DELIVERED;
+            default               -> null;
+        };
     }
 }

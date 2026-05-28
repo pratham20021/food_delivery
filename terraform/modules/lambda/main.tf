@@ -181,13 +181,13 @@ resource "aws_lambda_function" "notification_enricher" {
   timeout          = 60
   memory_size      = 128
 
-  # No vpc_config — reaches SQS/S3/SNS via public AWS endpoints (no NAT needed)
+  # No vpc_config — reaches S3/SNS/SES via public AWS endpoints (no NAT needed)
   layers = [aws_lambda_layer_version.aws_clients.arn]
 
   environment {
     variables = {
-      INVOICE_QUEUE_URL   = aws_sqs_queue.invoice.url
       NOTIFICATION_BUCKET = aws_s3_bucket.invoices.bucket
+      SES_FROM_EMAIL      = var.ses_from_email
       AWS_REGION_NAME     = var.aws_region
     }
   }
@@ -220,13 +220,13 @@ resource "aws_lambda_function" "invoice_generator" {
   timeout          = 60
   memory_size      = 128
 
-  # No vpc_config — only needs S3 and SNS, both reachable via public endpoints
+  # No vpc_config — only needs S3 and SES, both reachable via public endpoints
   layers = [aws_lambda_layer_version.aws_clients.arn]
 
   environment {
     variables = {
       INVOICE_BUCKET  = aws_s3_bucket.invoices.bucket
-      SNS_TOPIC_ARN   = var.sns_topic_arn
+      SES_FROM_EMAIL  = var.ses_from_email
       AWS_REGION_NAME = var.aws_region
     }
   }
@@ -255,10 +255,4 @@ resource "aws_s3_bucket_notification" "invoice_trigger" {
   depends_on = [aws_lambda_permission.s3_invoke_invoice]
 }
 
-# ── SQS → invoice_generator (notification_enricher queues, Lambda polls) ──────
-resource "aws_lambda_event_source_mapping" "sqs_to_invoice_generator" {
-  event_source_arn                   = aws_sqs_queue.invoice.arn
-  function_name                      = aws_lambda_function.invoice_generator.arn
-  batch_size                         = 1
-  function_response_types            = ["ReportBatchItemFailures"]
-}
+# invoice_generator is triggered only by S3 (invoices/pending/) — no SQS mapping needed

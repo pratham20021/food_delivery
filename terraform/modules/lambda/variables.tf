@@ -10,3 +10,4 @@ variable "db_password"         { type = string }
 variable "subnet_ids"          { type = list(string) }
 variable "lambda_sg_id"        { type = string }
 variable "lambda_role_arn"     { type = string }
+variable "ses_from_email"      { type = string }

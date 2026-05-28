@@ -46,6 +46,7 @@ docker run -d \
   -e AWS_REGION="${aws_region}" \
   -e SNS_TOPIC_ARN="${sns_topic_arn}" \
   -e SQS_ORDER_QUEUE_URL="${sqs_order_queue_url}" \
+  -e SES_FROM_EMAIL="${ses_from_email}" \
   -e JWT_SECRET="${jwt_secret}" \
   -e "SPRING_DATASOURCE_URL=jdbc:mysql://${db_endpoint}/${db_name}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true" \
   ${ecr_repo_url}:latest

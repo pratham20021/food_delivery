@@ -32,6 +32,7 @@ resource "aws_instance" "app" {
     app_port            = var.app_port
     account_id          = data.aws_caller_identity.current.account_id
     sqs_order_queue_url = var.sqs_order_queue_url
+    ses_from_email      = var.ses_from_email
   })
 
   tags = { Name = "${var.project}-${var.environment}-app-server" }
