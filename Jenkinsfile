@@ -9,6 +9,7 @@ pipeline {
         APP_PORT         = "8080"
         TF_DIR           = "terraform"
         TF_IN_AUTOMATION = "true"
+        PATH             = "C:\\Python312;C:\\Python312\\Scripts;${env.PATH}"
     }
 
     options {
@@ -45,8 +46,8 @@ pipeline {
         stage('Lambda Layers') {
             steps {
                 bat '''
-                    pip install pymysql -t lambda\\layers\\db_utils\\python\\ --quiet
-                    pip install boto3   -t lambda\\layers\\aws_clients\\python\\ --quiet
+                    C:\Python312\Scripts\pip.exe install pymysql -t lambda\layers\db_utils\python\ --quiet
+                    C:\Python312\Scripts\pip.exe install boto3   -t lambda\layers\aws_clients\python\ --quiet
                     echo Lambda layers ready
                 '''
             }
