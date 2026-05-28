@@ -157,7 +157,7 @@ pipeline {
                     def healthy = false
                     for (int i = 1; i <= 15; i++) {
                         def status = bat(
-                            script: "curl -s -o NUL -w \"%%{http_code}\" http://${env.APP_IP}:${APP_PORT}/actuator/health",
+                            script: "curl -s -o NUL -w \"%%{http_code}\" http://${env.APP_IP}:${APP_PORT}/actuator/health || echo 000",
                             returnStdout: true
                         ).trim().readLines().last()
 
