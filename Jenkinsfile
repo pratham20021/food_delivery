@@ -124,8 +124,6 @@ pipeline {
         }
 
         // ── 7. Capture Outputs & Store in SSM ────────────────────────────────
-        // Stores all runtime config in SSM so ec2-deploy.sh can read them
-        // cleanly without any shell quoting issues.
         stage('Capture Outputs') {
             steps {
                 withCredentials([
@@ -161,25 +159,23 @@ pipeline {
 
                         def dbUrl = "jdbc:mysql://${env.RDS_ENDPOINT}/food_delivery?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
 
-                        // Store all config in SSM Parameter Store — ec2-deploy.sh reads from here
                         bat """
-                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/ecr-url        --value "${env.ECR_URL}"       --type String  --overwrite
-                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/sns-topic-arn  --value "${env.SNS_TOPIC_ARN}" --type String  --overwrite
-                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/sqs-queue-url  --value "${env.SQS_QUEUE_URL}" --type String  --overwrite
-                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/ses-from-email --value "%SES_FROM_EMAIL%"      --type String  --overwrite
-                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/db-url         --value "${dbUrl}"             --type String  --overwrite
+                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/ecr-url        --value "${env.ECR_URL}"       --type String       --overwrite
+                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/sns-topic-arn  --value "${env.SNS_TOPIC_ARN}" --type String       --overwrite
+                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/sqs-queue-url  --value "${env.SQS_QUEUE_URL}" --type String       --overwrite
+                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/ses-from-email --value "%SES_FROM_EMAIL%"      --type String       --overwrite
+                            aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/db-url         --value "${dbUrl}"             --type String       --overwrite
                             aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/db-password    --value "%DB_PASSWORD%"        --type SecureString --overwrite
                             aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/jwt-secret     --value "%JWT_SECRET%"         --type SecureString --overwrite
                         """
-                        echo "SSM parameters stored successfully"
+                        echo "SSM parameters stored"
                     }
                 }
             }
         }
 
         // ── 8. Deploy to EC2 via SSM ──────────────────────────────────────────
-        // Runs ec2-deploy.sh on the EC2 instance via SSM Run Command.
-        // The script reads all config from SSM — no secrets in command line.
+        // Uses --cli-input-json file to avoid Windows quoting issues entirely.
         stage('Deploy to EC2') {
             steps {
                 withCredentials([
@@ -196,41 +192,43 @@ pipeline {
 
                         echo "Deploying to EC2: ${instanceId}"
 
-                        // Send the deploy script content via SSM (heredoc approach)
+                        // The deploy command that runs on EC2 — reads all secrets from SSM
+                        def deployCmd = [
+                            'R=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)',
+                            'ECR=$(aws ssm get-parameter --region $R --name /food-delivery/dev/ecr-url --query Parameter.Value --output text)',
+                            'DB_URL=$(aws ssm get-parameter --region $R --name /food-delivery/dev/db-url --query Parameter.Value --output text)',
+                            'DB_PASS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/db-password --with-decryption --query Parameter.Value --output text)',
+                            'SNS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/sns-topic-arn --query Parameter.Value --output text)',
+                            'SQS=$(aws ssm get-parameter --region $R --name /food-delivery/dev/sqs-queue-url --query Parameter.Value --output text)',
+                            'SES=$(aws ssm get-parameter --region $R --name /food-delivery/dev/ses-from-email --query Parameter.Value --output text)',
+                            'JWT=$(aws ssm get-parameter --region $R --name /food-delivery/dev/jwt-secret --with-decryption --query Parameter.Value --output text)',
+                            'aws ecr get-login-password --region $R | docker login --username AWS --password-stdin $ECR',
+                            'docker pull $ECR:latest',
+                            'docker stop food-delivery 2>/dev/null || true',
+                            'docker rm food-delivery 2>/dev/null || true',
+                            'docker run -d --name food-delivery --restart unless-stopped -p 8080:8080 -e AWS_REGION=$R -e SNS_TOPIC_ARN=$SNS -e SQS_ORDER_QUEUE_URL=$SQS -e SES_FROM_EMAIL=$SES -e JWT_SECRET=$JWT -e DB_USERNAME=admin -e DB_PASSWORD=$DB_PASS -e SPRING_DATASOURCE_URL=$DB_URL $ECR:latest',
+                            'sleep 15',
+                            'docker ps | grep food-delivery',
+                            'docker logs food-delivery --tail 30'
+                        ].join(' && ')
+
+                        // Write SSM input as JSON file — avoids ALL Windows quoting issues
+                        def ssmJson = """{"InstanceIds":["${instanceId}"],"DocumentName":"AWS-RunShellScript","Parameters":{"commands":["${deployCmd.replace('\\', '\\\\').replace('"', '\\"')}"]},"TimeoutSeconds":180}"""
+
+                        writeFile file: 'ssm-deploy.json', text: ssmJson
+
                         def cmdId = bat(
-                            script: """aws ssm send-command ^
-                                --region %AWS_REGION% ^
-                                --instance-ids "${instanceId}" ^
-                                --document-name "AWS-RunShellScript" ^
-                                --parameters "commands=[\"bash /tmp/ec2-deploy.sh\"],workingDirectory=[\"/tmp\"]" ^
-                                --query "Command.CommandId" --output text""",
+                            script: 'aws ssm send-command --region %AWS_REGION% --cli-input-json file://ssm-deploy.json --query Command.CommandId --output text',
                             returnStdout: true
                         ).trim().readLines().last()
 
-                        // If script not on EC2 yet, upload it first then run
-                        if (cmdId == 'None' || cmdId.isEmpty()) {
-                            echo "Uploading deploy script to EC2 first..."
-                        }
-
-                        // Upload script via SSM then execute
-                        def uploadAndRunCmdId = bat(
-                            script: """aws ssm send-command ^
-                                --region %AWS_REGION% ^
-                                --instance-ids "${instanceId}" ^
-                                --document-name "AWS-RunShellScript" ^
-                                --parameters "commands=[\"curl -sf http://169.254.169.254/latest/meta-data/instance-id && REGION=\$(curl -s http://169.254.169.254/latest/meta-data/placement/region) && APP_PORT=8080 && ECR_URL=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/ecr-url --query Parameter.Value --output text) && DB_URL=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/db-url --query Parameter.Value --output text) && DB_PASS=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/db-password --with-decryption --query Parameter.Value --output text) && SNS_ARN=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/sns-topic-arn --query Parameter.Value --output text) && SQS_URL=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/sqs-queue-url --query Parameter.Value --output text) && SES_EMAIL=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/ses-from-email --query Parameter.Value --output text) && JWT=\$(aws ssm get-parameter --region \$REGION --name /food-delivery/dev/jwt-secret --with-decryption --query Parameter.Value --output text) && aws ecr get-login-password --region \$REGION | docker login --username AWS --password-stdin \$ECR_URL && docker pull \$ECR_URL:latest && docker stop food-delivery 2>/dev/null || true && docker rm food-delivery 2>/dev/null || true && docker run -d --name food-delivery --restart unless-stopped -p \$APP_PORT:\$APP_PORT -e AWS_REGION=\$REGION -e SNS_TOPIC_ARN=\$SNS_ARN -e SQS_ORDER_QUEUE_URL=\$SQS_URL -e SES_FROM_EMAIL=\$SES_EMAIL -e JWT_SECRET=\$JWT -e DB_USERNAME=admin -e DB_PASSWORD=\$DB_PASS -e SPRING_DATASOURCE_URL=\$DB_URL \$ECR_URL:latest && sleep 10 && docker ps | grep food-delivery && docker logs food-delivery --tail 20\"]" ^
-                                --timeout-seconds 180 ^
-                                --query "Command.CommandId" --output text""",
-                            returnStdout: true
-                        ).trim().readLines().last()
-
-                        echo "SSM Command ID: ${uploadAndRunCmdId}"
+                        echo "SSM Command ID: ${cmdId}"
                         echo "Waiting 90s for deploy to complete..."
                         sleep(90)
 
                         bat """aws ssm get-command-invocation ^
                             --region %AWS_REGION% ^
-                            --command-id ${uploadAndRunCmdId} ^
+                            --command-id ${cmdId} ^
                             --instance-id ${instanceId} ^
                             --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}"
                         """
