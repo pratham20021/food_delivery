@@ -162,14 +162,6 @@ pipeline {
                             aws ssm put-parameter --region %AWS_REGION% --name /food-delivery/dev/jwt-secret     --value "%JWT_SECRET%"         --type SecureString --overwrite
                         """
                         echo "SSM parameters stored"
-
-                        // Also subscribe email to SNS if not already confirmed
-                        bat """
-                            aws sns subscribe --region %AWS_REGION% ^
-                                --topic-arn "${env.SNS_TOPIC_ARN}" ^
-                                --protocol email ^
-                                --notification-endpoint "%SES_FROM_EMAIL%" 2>nul || echo SNS subscription already exists
-                        """
                     }
                 }
             }
