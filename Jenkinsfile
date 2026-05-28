@@ -120,7 +120,8 @@ pipeline {
                             -auto-approve ^
                             -input=false ^
                             -var="aws_region=%AWS_REGION%" ^
-                            -var="environment=%ENVIRONMENT%"
+                            -var="environment=%ENVIRONMENT%" ^
+                            -var="db_instance_class=db.t3.micro"
                     '''
                 }
             }

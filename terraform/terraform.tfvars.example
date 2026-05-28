@@ -15,7 +15,7 @@ ec2_ami_id         = "ami-0f58b397bc5c1f2e8"   # Amazon Linux 2023 ap-south-1
 
 db_name            = "food_delivery"
 db_username        = "admin"
-db_instance_class  = "db.t2.micro"
+db_instance_class  = "db.t3.micro"
 
 # ── Sensitive — set via env vars or CI secrets, not here ─────────────────────
 # db_password        = "CHANGE_ME"
