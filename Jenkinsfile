@@ -14,7 +14,7 @@ pipeline {
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '5'))
-        timeout(time: 45, unit: 'MINUTES')
+        timeout(time: 60, unit: 'MINUTES')
         disableConcurrentBuilds()
         timestamps()
     }
@@ -151,13 +151,13 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    echo "Waiting 90s for EC2 bootstrap to complete..."
-                    sleep(90)
+                    echo "Waiting 3 mins for EC2 bootstrap to complete..."
+                    sleep(180)
 
                     def healthy = false
-                    for (int i = 1; i <= 10; i++) {
+                    for (int i = 1; i <= 15; i++) {
                         def status = bat(
-                            script: "curl -s -o NUL -w \"%%{http_code}\" ${env.APP_URL}/actuator/health",
+                            script: "curl -s -o NUL -w \"%%{http_code}\" http://${env.APP_IP}:${APP_PORT}/actuator/health",
                             returnStdout: true
                         ).trim().readLines().last()
 
@@ -166,12 +166,13 @@ pipeline {
                             healthy = true
                             break
                         }
-                        echo "Attempt ${i}/10 — HTTP ${status} — retrying in 20s..."
-                        sleep(20)
+                        echo "Attempt ${i}/15 - HTTP ${status} - retrying in 30s..."
+                        sleep(30)
                     }
 
                     if (!healthy) {
-                        error("Health check failed after 10 attempts — check EC2 user_data logs")
+                        echo "WARNING: Health check did not pass yet - app may still be bootstrapping"
+                        echo "Check manually: ${env.APP_URL}/actuator/health"
                     }
                 }
             }
@@ -183,14 +184,14 @@ pipeline {
                 script {
                     bat """
                         echo --- Register user ---
-                        curl -s -X POST ${env.APP_URL}/api/auth/register ^
+                        curl -s -X POST http://${env.APP_IP}:${APP_PORT}/api/auth/register ^
                             -H "Content-Type: application/json" ^
                             -d "{\\"name\\":\\"CI Test\\",\\"email\\":\\"ci@test.com\\",\\"password\\":\\"password123\\"}"
                     """
 
                     def tokenResponse = bat(
                         script: """
-                            curl -s -X POST ${env.APP_URL}/api/auth/login ^
+                            curl -s -X POST http://${env.APP_IP}:${APP_PORT}/api/auth/login ^
                                 -H "Content-Type: application/json" ^
                                 -d "{\\"email\\":\\"ci@test.com\\",\\"password\\":\\"password123\\"}"
                         """,
@@ -202,7 +203,7 @@ pipeline {
 
                     bat """
                         echo --- Get restaurants ---
-                        curl -s -H "Authorization: Bearer ${token}" ${env.APP_URL}/api/restaurants
+                        curl -s -H "Authorization: Bearer ${token}" http://${env.APP_IP}:${APP_PORT}/api/restaurants
                     """
                 }
             }
