@@ -62,6 +62,19 @@ resource "aws_iam_policy" "ecr_pull" {
   })
 }
 
+# ── SSM Parameter Store read access for EC2 (reads deploy config) ────────────
+resource "aws_iam_policy" "ssm_params" {
+  name = "${var.project}-${var.environment}-ssm-params"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:PutParameter"]
+      Resource = "arn:aws:ssm:*:*:parameter/food-delivery/*"
+    }]
+  })
+}
+
 # ── Attach Policies ───────────────────────────────────────────────────────────
 resource "aws_iam_role_policy_attachment" "sns" {
   role       = aws_iam_role.ec2_role.name
@@ -76,6 +89,11 @@ resource "aws_iam_role_policy_attachment" "ecr" {
 resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_params" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.ssm_params.arn
 }
 
 # ── Instance Profile ──────────────────────────────────────────────────────────
