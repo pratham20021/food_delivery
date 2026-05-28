@@ -69,7 +69,7 @@ resource "aws_security_group" "rds" {
 # ── Lambda SG ─────────────────────────────────────────────────────────────────
 resource "aws_security_group" "lambda" {
   name        = "${var.project}-${var.environment}-lambda-sg"
-  description = "Lambda functions — outbound only (RDS, AWS APIs)"
+  description = "Lambda functions - outbound only (RDS, AWS APIs)"
   vpc_id      = var.vpc_id
 
   egress {
