@@ -45,10 +45,10 @@ public class SnsNotificationService {
 
     private String buildSubject(Order.OrderStatus status) {
         return switch (status) {
-            case ORDER_RECEIVED  -> "🍽️ Order Received!";
-            case PREPARING       -> "👨‍🍳 Your Order is Being Prepared";
-            case OUT_FOR_DELIVERY -> "🚴 Your Order is Out for Delivery";
-            case DELIVERED       -> "✅ Order Delivered!";
+            case ORDER_RECEIVED   -> "Order Received - Food Delivery";
+            case PREPARING        -> "Your Order is Being Prepared";
+            case OUT_FOR_DELIVERY -> "Your Order is Out for Delivery";
+            case DELIVERED        -> "Order Delivered - Enjoy your meal!";
         };
     }
 
