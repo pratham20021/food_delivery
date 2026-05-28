@@ -15,7 +15,7 @@ terraform {
 
   # Remote state — swap bucket/key to match your account
   backend "s3" {
-    bucket         = "food-delivery-tfstate-ap-south-1"
+    bucket         = "food-delivery-tfstate-753668405724-dev"
     key            = "food-delivery/terraform.tfstate"
     region         = "ap-south-1"
     encrypt        = true
