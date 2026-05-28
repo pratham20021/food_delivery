@@ -45,11 +45,11 @@ pipeline {
         // ── 3. Install Lambda Layer Dependencies ──────────────────────────────
         stage('Lambda Layers') {
             steps {
-                bat '''
-                    C:\Python312\Scripts\pip.exe install pymysql -t lambda\layers\db_utils\python\ --quiet
-                    C:\Python312\Scripts\pip.exe install boto3   -t lambda\layers\aws_clients\python\ --quiet
+                bat """
+                    "C:/Python312/Scripts/pip.exe" install pymysql -t lambda/layers/db_utils/python/ --quiet
+                    "C:/Python312/Scripts/pip.exe" install boto3   -t lambda/layers/aws_clients/python/ --quiet
                     echo Lambda layers ready
-                '''
+                """
             }
         }
 
