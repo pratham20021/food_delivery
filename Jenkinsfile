@@ -297,6 +297,9 @@ echo "=== Deploy complete ==="
         stage('Health Check') {
             steps {
                 script {
+                    echo "Waiting 90s for Spring Boot to fully start..."
+                    sleep(90)
+
                     def healthy = false
                     for (int i = 1; i <= 15; i++) {
                         def status = bat(
