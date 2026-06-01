@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -27,7 +28,8 @@ public class AwsConfig {
     @Value("${aws.secret.access.key:}")
     private String secretAccessKey;
 
-    private software.amazon.awssdk.auth.credentials.AwsCredentialsProvider credentialsProvider() {
+    // Single shared provider — avoids 3x slow IMDS lookups on startup
+    private AwsCredentialsProvider credentialsProvider() {
         if (accessKeyId != null && !accessKeyId.isBlank() &&
             secretAccessKey != null && !secretAccessKey.isBlank()) {
             log.info("AWS: using explicit credentials for region [{}]", region);
@@ -35,8 +37,34 @@ public class AwsConfig {
                 AwsBasicCredentials.create(accessKeyId, secretAccessKey));
         }
         log.info("AWS: using DefaultCredentialsProvider for region [{}]", region);
-        return DefaultCredentialsProvider.create();
+        // async=false prevents background refresh thread that slows startup
+        return DefaultCredentialsProvider.builder().asyncCredentialUpdateEnabled(false).build();
     }
+
+    @Bean
+    public SesClient sesClient() {
+        return SesClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
+    }
+
+    @Bean
+    public SnsClient snsClient() {
+        return SnsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
+    }
+
+    @Bean
+    public SqsClient sqsClient() {
+        return SqsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
+    }
+}
 
     @Bean
     public SesClient sesClient() {
