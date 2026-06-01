@@ -62,7 +62,7 @@ variable "ec2_ami_id" {
 variable "ec2_instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t2.micro"  # free tier eligible
+  default     = "t3.micro"  # faster startup than t2.micro, still free tier eligible
 }
 
 variable "ec2_key_name" {
