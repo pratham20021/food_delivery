@@ -259,8 +259,25 @@ echo "=== Deploy complete ==="
                             returnStdout: true
                         ).trim().readLines().last()
 
-                        echo "SSM Command ID: ${cmdId} — waiting 90s..."
-                        sleep(90)
+                        echo "SSM Command ID: ${cmdId} — waiting 180s..."
+                        sleep(180)
+
+                        // Poll until complete or timeout
+                        def ssmStatus = ''
+                        for (int i = 1; i <= 6; i++) {
+                            ssmStatus = bat(
+                                script: """aws ssm get-command-invocation ^
+                                    --region %AWS_REGION% ^
+                                    --command-id ${cmdId} ^
+                                    --instance-id ${instanceId} ^
+                                    --query Status --output text""",
+                                returnStdout: true
+                            ).trim().readLines().last()
+
+                            echo "SSM Status (attempt ${i}/6): ${ssmStatus}"
+                            if (ssmStatus == 'Success' || ssmStatus == 'Failed' || ssmStatus == 'TimedOut') break
+                            sleep(30)
+                        }
 
                         bat """aws ssm get-command-invocation ^
                             --region %AWS_REGION% ^
@@ -268,6 +285,10 @@ echo "=== Deploy complete ==="
                             --instance-id ${instanceId} ^
                             --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}"
                         """
+
+                        if (ssmStatus == 'Failed' || ssmStatus == 'TimedOut') {
+                            error("Deploy script ${ssmStatus} on EC2")
+                        }
                     }
                 }
             }
